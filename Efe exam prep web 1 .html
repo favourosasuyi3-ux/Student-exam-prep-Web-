@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Math Exam — 10 pages × 10 questions with 5-min timer</title>
+<style>
+  body{font-family:Arial,Helvetica,sans-serif;background:#f4f6f8;margin:0;padding:18px}
+  .wrap{max-width:960px;margin:18px auto}
+  .card{background:#fff;padding:18px;border-radius:8px;box-shadow:0 4px 18px rgba(0,0,0,.06);margin-bottom:14px}
+  h1,h2{margin:0 0 10px}
+  label{display:block;margin:8px 0 4px;font-weight:600}
+  input,select,button,textarea{width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;box-sizing:border-box}
+  button{cursor:pointer;background:#2b7cff;color:#fff;border:none}
+  .row{display:flex;gap:10px}
+  .row>div{flex:1}
+  .muted{color:#666;font-size:13px}
+  .nav{display:flex;gap:8px;align-items:center}
+  .small{width:auto;padding:8px 12px;font-size:13px}
+  .question{margin:12px 0;padding:10px;border-radius:6px;background:#fbfdff}
+  .hidden{display:none}
+  table{width:100%;border-collapse:collapse;margin-top:10px}
+  th,td{padding:8px;border:1px solid #eee;text-align:left}
+  #adminDot{position:fixed;top:8px;right:8px;width:16px;height:16px;border-radius:50%;background:#333;opacity:0.06;cursor:pointer}
+  #adminDot:hover{opacity:0.35}
+  #adminModal{position:fixed;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center}
+  #adminBox{background:#fff;padding:18px;border-radius:8px;width:92%;max-width:900px;box-shadow:0 6px 30px rgba(0,0,0,.3)}
+  .certificate{max-width:800px;margin:12px auto;padding:26px;border:6px double #333;background:linear-gradient(180deg,#fff,#f7f7f7);text-align:center;border-radius:4px}
+  .cert-title{font-size:24px;font-weight:700;margin-bottom:6px}
+  .cert-sub{font-size:15px;margin-bottom:12px}
+  .cert-name{font-size:20px;font-weight:700;margin:12px 0}
+  .cert-score{font-size:18px;margin:10px 0}
+  .pager{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:12px}
+  @media(max-width:640px){ .row{flex-direction:column} }
+</style>
+</head>
+<body>
+  <div id="adminDot" title="Admin (hidden)"></div>
+
+  <div class="wrap">
+    <!-- Registration -->
+    <div class="card" id="registerCard">
+      <h1>Student Registration</h1>
+      <form id="regForm">
+        <div class="row">
+          <div>
+            <label>First name</label>
+            <input type="text" id="fname" required placeholder="First name" />
+          </div>
+          <div>
+            <label>Last name</label>
+            <input type="text" id="lname" required placeholder="Last name" />
+          </div>
+        </div>
+        <label>Email (optional)</label>
+        <input type="email" id="email" placeholder="name@example.com" />
+        <div style="margin-top:12px" class="nav">
+          <button class="small" type="submit">Start Exam</button>
+          <div class="muted" style="margin-left:8px">Progress saved locally. Admin can view registrations.</div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Exam -->
+    <div class="card hidden" id="examCard">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <h2 id="examTitle">Math Exam</h2>
+          <div class="muted">Student: <span id="displayStudent"></span></div>
+        </div>
+        <div style="text-align:right">
+          <div class="muted">Total score so far: <span id="totalSoFar">0</span></div>
+          <div class="muted">Page <span id="currentPage">1</span> / <span id="totalPages">10</span></div>
+        </div>
+      </div>
+
+      <hr style="margin:12px 0" />
+      <div id="timer">Time: 05:00</div>
+      <div id="questionsArea"></div>
+
+      <div class="pager">
+        <button id="prevBtn" class="small">Previous</button>
+        <button id="submitPageBtn" class="small">Submit Page</button>
+        <button id="nextBtn" class="small">Next</button>
+      </div>
+
+      <div id="pageResult" class="muted" style="margin-top:12px"></div>
+    </div>
+
+    <!-- Certificate -->
+    <div class="card hidden" id="certCard">
+      <div id="certificatePrintable">
+        <div class="certificate" id="certificateDiv">
+          <div class="cert-title">Certificate of Achievement</div>
+          <div class="cert-sub">This certifies that</div>
+          <div class="cert-name" id="certStudent"></div>
+          <div class="cert-score" id="certScoreDisplay"></div>
+          <div class="muted" id="certRemark"></div>
+          <div style="margin-top:12px" class="muted">Date: <span id="certDate"></span></div>
+        </div>
+      </div>
+
+      <div style="margin-top:14px" class="nav">
+        <button id="downloadPdf" class="small">Download Certificate (PDF)</button>
+        <button id="restartBtn" class="small">Restart (New Student)</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- admin modal -->
+  <div id="adminModal">
+    <div id="adminBox">
+      <h2>Registered Students</h2>
+      <div class="muted">Total registered: <span id="totalRegistered">0</span></div>
+      <table id="registeredTable">
+        <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Registered At</th></tr></thead>
+        <tbody></tbody>
+/* Timer */
+function startTimer(){
+  clearInterval(timerInterval);
+  timeLeft = PAGE_TIME_SEC;
+  updateTimerDisplay();
+  timerInterval = setInterval(()=>{
+    timeLeft--;
+    updateTimerDisplay();
+    if(timeLeft<=0){
+      clearInterval(timerInterval);
+      alert('Time up for this page!');
+      evaluateCurrentPage();
+      if(currentPage<TOTAL_PAGES){ currentPage++; renderPage(currentPage);}
+      else{ finishExam();}
+    }
+  },1000);
+}
+function updateTimerDisplay(){let m=Math.floor(timeLeft/60).toString().padStart(2,'0');let s=(timeLeft%60).toString().padStart(2,'0');timerEl.textContent='Time: '+m+':'+s;}
+      </table>
+      <div style="margin-top:12px" class="nav">
+        <button id="closeAdmin" class="small">Close</button>
+        <button id="clearRegs" class="small">Clear All Registrations</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- html2pdf for PDF creation (if blocked in TrebEdit open in Chrome) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.3/html2pdf.bundle.min.js"></script>
+
+<script>
+/* CONFIG */
+const ADMIN_PASSWORD = "efe password ";            // change if you want
+const STORAGE_REGS = "registeredStudents100";
+const STORAGE_PROGRESS = "examProgress100";
+const QUESTIONS_PER_PAGE = 10;
+const TOTAL_PAGES = 10; // 10 pages -> 100 questions
+
+/* QUESTION BANK (100 questions) */
+/* Edit / expand this array to add or change questions. Each item: { q: "...", opts: [...], ans: "..." } */
+const questions = [
+/* 1-10 (page1) */
+{q:"Simplify: 2x + 3x - 5", opts:["5x - 5","5x + 5","6x - 5","5x - 3"], ans:"5x - 5"},
+{q:"Solve: 3y = 12. y = ?", opts:["2","3","4","6"], ans:"4"},
+{q:"Find x if 2x + 5 = 15", opts:["4","5","6","10"], ans:"5"},
+{q:"Factorize: x^2 + 5x + 6", opts:["(x+2)(x+3)","(x-2)(x-3)","(x+1)(x+6)","(x-1)(x-6)"], ans:"(x+2)(x+3)"},
+{q:"LCM of 12 and 18 is:", opts:["24","36","48","72"], ans:"36"},
+{q:"If 3/4 = x/12, x = ?", opts:["6","8","9","12"], ans:"9"},
+{q:"Simplify: 2/3 + 1/6", opts:["1/2","5/6","2/9","7/6"], ans:"5/6"},
+{q:"If 25% of a number is 15, number is:", opts:["45","50","60","75"], ans:"60"},
+{q:"Solve: x^2 = 49", opts:["7","-7","±7","14"], ans:"±7"},
+{q:"Convert 0.75 to fraction", opts:["1/4","2/3","3/4","4/5"], ans:"3/4"},
+
+/* 11-20 (page2) */
+{q:"Mean of 2,4,6,8 is:", opts:["5","6","4","7"], ans:"5"},
+{q:"Solve: 5x - 7 = 18 => x =", opts:["3","4","5","6"], ans:"5"},
+{q:"If y = 2x +1 and x=4, y = ?", opts:["5","7","9","10"], ans:"9"},
+{q:"Median of 10,15,20,25,30 is:", opts:["15","20","25","30"], ans:"20"},
+{q:"Bag contains 3 red,2 blue; P(red) = ?", opts:["2/5","3/5","1/5","1/2"], ans:"3/5"},
+{q:"Simplify: (x^3)(x^2) =", opts:["x^5","x^6","x^9","x^32"], ans:"x^5"},
+{q:"√144 =", opts:["10","11","12","13"], ans:"12"},
+{q:"Convert 135° to radians", opts:["2π/3","3π/4","5π/6","π"], ans:"3π/4"},
+{q:"Area of rectangle 12×8 is:", opts:["96","80","100","144"], ans:"96"},
+{q:"Expand (x+2)(x+4)", opts:["x^2+6x+8","x^2+8x+4","x^2+4x+8","x^2+2x+8"], ans:"x^2+6x+8"},
+
+/* 21-30 (page3) */
+{q:"5/8 ÷ 1/4 =", opts:["5/2","5/32","20/8","8/5"], ans:"5/2"},
+{q:"Gradient of y = 3x + 2 is:", opts:["2","3","-2","-3"], ans:"3"},
+{q:"2^x = 16, x = ?", opts:["2","3","4","5"], ans:"4"},
+{q:"Bought ₦6000 sold ₦7500 profit% =", opts:["20%","25%","30%","35%"], ans:"25%"},
+{q:"Solve x/3 = 9 => x=", opts:["3","18","27","36"], ans:"27"},
+{q:"If sin θ = 0.5, θ =", opts:["30°","45°","60°","90°"], ans:"30°"},
+{q:"Simple interest on ₦10000 at 5% for 2 years =", opts:["₦500","₦1000","₦1500","₦2000"], ans:"₦1000"},
+{q:"Sum of angles in triangle =", opts:["90°","120°","180°","360°"], ans:"180°"},
+{q:"0.2 as percent =", opts:["2%","10%","20%","200%"], ans:"20%"},
+{q:"Solve x^2 - 9 = 0 => x =", opts:["3","-3","±3","9"], ans:"±3"},
+
+/* 31-40 (page4) */
+{q:"Simplify: 3(2x -1) =", opts:["6x -3","6x -1","5x -3","6x +3"], ans:"6x -3"},
+{q:"If 4x = 20, x =", opts:["4","5","6","8"], ans:"5"},
+{q:"Factorise: x^2 - 5x + 6", opts:["(x-2)(x-3)","(x+2)(x+3)","(x-1)(x-6)","(x+1)(x+6)"], ans:"(x-2)(x-3)"},
+{q:"LCM of 8 and 14 is:", opts:["28","56","112","14"], ans:"56"},
+{q:"If x/5 = 4, x =", opts:["9","20","25","30"], ans:"20"},
+{q:"Find HCF of 18 and 24", opts:["2","6","12","3"], ans:"6"},
+{q:"Convert 3/5 to decimal", opts:["0.3","0.5","0.6","0.8"], ans:"0.6"},
+{q:"Solve 7 + y = 12 => y =", opts:["5","6","7","4"], ans:"5"},
+{q:"Area of triangle base 10 height 6 =", opts:["30","60","20","16"], ans:"30"},
+{q:"Perimeter of square side 7 =", opts:["14","21","28","49"], ans:"28"},
+
+/* 41-50 (page5) */
+{q:"Simplify: (x^2)*(x^3) =", opts:["x^5","x^6","x^1","x^9"], ans:"x^5"},
+{q:"If y=3x and x=4, y=", opts:["7","10","12","14"], ans:"12"},
+{q:"Solve 9x = 81 => x =", opts:["7","8","9","10"], ans:"9"},
+{q:"Convert 1/8 to decimal", opts:["0.125","0.25","0.5","0.75"], ans:"0.125"},
+{q:"Mean of 5,10,15 is:", opts:["8","10","11","12"], ans:"10"},
+{q:"Median of 3,7,9,11,13 is:", opts:["7","9","11","10"], ans:"9"},
+{q:"Probability of head on coin toss:", opts:["1/2","1/3","1/4","1"], ans:"1/2"},
+{q:"Solve 4^2 =", opts:["8","12","16","4"], ans:"16"},
+{q:"If 20% of x = 10, x =", opts:["40","50","60","80"], ans:"50"},
+{q:"Simplify √81 =", opts:["7","8","9","10"], ans:"9"},
+
+/* 51-60 (page6) */
+{q:"Solve: x + 7 = 15 => x =", opts:["6","7","8","9"], ans:"8"},
+{q:"If 2x = 10, x =", opts:["4","5","6","7"], ans:"5"},
+{q:"Factorise: x^2 - 4", opts:["(x-2)(x+2)","(x+2)(x+2)","(x-1)(x+4)","(x+1)(x-4)"], ans:"(x-2)(x+2)"},
+{q:"Area of circle radius 7 (πr^2) approx:", opts:["154","49","44","246"], ans:"154"},
+{q:"If p=3 and q=4, p^2 + q^2 =", opts:["9","16","25","7"], ans:"25"},
+{q:"Solve 10 - 3 = ?", opts:["6","7","8","5"], ans:"7"},
+{q:"What is 15% of 200?", opts:["20","25","30","35"], ans:"30"},
+{q:"Simplify: 6 × 7 =", opts:["36","42","48","40"], ans:"42"},
+{q:"If x=2, evaluate x^3", opts:["4","6","8","16"], ans:"8"},
+{q:"Convert 1.5 to fraction", opts:["3/2","1/2","2/3","5/2"], ans:"3/2"},
+
+/* 61-70 (page7) */
+{q:"Solve: 3(x+2)=15 => x =", opts:["3","4","2","5"], ans:"3"},
+{q:"If ratio a:b = 2:3 and a=8, b = ?", opts:["10","12","14","16"], ans:"12"},
+{q:"Find simple interest on 2000 at 5% for 1 year", opts:["100","50","200","150"], ans:"100"},
+{q:"Convert 60% to fraction", opts:["3/5","6/10","60/100","5/3"], ans:"3/5"},
+{q:"Solve 12 ÷ 3 =", opts:["3","4","2","6"], ans:"4"},
+{q:"If cos 0° =", opts:["0","1","1/2","√2/2"], ans:"1"},
+{q:"sin 90° =", opts:["0","1","1/2","√3/2"], ans:"1"},
+{q:"If 2^5 =", opts:["16","32","64","8"], ans:"32"},
+{q:"Expand: (x+1)^2", opts:["x^2+1","x^2+2x+1","x^2+2x","x^2-1"], ans:"x^2+2x+1"},
+{q:"Solve 7 × 8 =", opts:["54","56","58","60"], ans:"56"},
+
+/* 71-80 (page8) */
+{q:"If average of 3 numbers is 6, their sum is:", opts:["12","15","18","20"], ans:"18"},
+{q:"What is 11 × 11 ?", opts:["111","121","100","131"], ans:"121"},
+{q:"Simplify: 0.25 × 100", opts:["2.5","25","25.0","250"], ans:"25"},
+{q:"Solve: x - 9 = 3 => x =", opts:["12","6","3","9"], ans:"12"},
+{q:"If circumference = 2πr and r=7, circumference ≈", opts:["44","21","14","88"], ans:"44"},
+{q:"Simplify: 9 - 4 =", opts:["5","4","3","6"], ans:"5"},
+{q:"If 7a = 21 => a =", opts:["2","3","4","5"], ans:"3"},
+{q:"Square root of 121 is:", opts:["10","11","12","13"], ans:"11"},
+{q:"Find HCF of 9 and 6", opts:["1","3","6","9"], ans:"3"},
+{q:"Simplify 5 × (2+3) =", opts:["15","10","25","5"], ans:"25"},
+
+/* 81-90 (page9) */
+{q:"If x=3, evaluate 4x + 2", opts:["12","14","10","8"], ans:"14"},
+{q:"Convert 2/5 to percentage", opts:["20%","40%","50%","2%"], ans:"40%"},
+{q:"If probability of event = 0.25, as fraction it is", opts:["1/2","1/4","1/3","1"], ans:"1/4"},
+{q:"Solve: x^2 - 4x + 4 = 0 => x", opts:["1","2","3","4"], ans:"2"},
+{q:"Simplify: 8 ÷ 2(2+2) =>", opts:["1","16","8","4"], ans:"16"},
+{q:"If 3:4 = x:12, x =", opts:["9","8","7","10"], ans:"9"},
+{q:"Area of square side 5 =", opts:["10","20","25","30"], ans:"25"},
+{q:"If 10 students scored average 7, sum is", opts:["70","60","80","90"], ans:"70"},
+{q:"Solve: 6*6 =", opts:["36","42","30","32"], ans:"36"},
+{q:"Simplify (3^2)*(3^1) =", opts:["3^3","3^4","9","27"], ans:"3^3"},
+
+/* 91-100 (page10) */
+{q:"Convert 72° to radians (π rad ≈ 180°)", opts:["2π/5","4π/5","π/3","π/2"], ans:"2π/5"},
+{q:"If 5x + 3 = 23, x =", opts:["3","4","5","6"], ans:"4"},
+{q:"Simplify: (x-2)(x+2) =", opts:["x^2-4","x^2+4","x^2-2x","x^2+2x"], ans:"x^2-4"},
+{q:"If a number is increased by 20% and becomes 120, original = ?", opts:["100","90","80","110"], ans:"100"},
+{q:"If tan 45° =", opts:["0","1","√3","undefined"], ans:"1"},
+{q:"Solve: 2x + 3 = 11 => x =", opts:["3","4","5","6"], ans:"4"},
+{q:"Simplify 1000 ÷ 10 =", opts:["10","100","1000","1"], ans:"100"},
+{q:"If x + x + x = 12, x =", opts:["3","4","5","6"], ans:"4"},
+{q:"Mean of 10,20,30,40 is:", opts:["25","20","30","22"], ans:"25"},
+{q:"Solve x^2 = 36 => x = ", opts:["6","-6","±6","0"], ans:"±6"}
+]; // end questions
+
+/* STATE */
+let student = {fname:'', lname:'', email:''};
+let currentPage = 1;
+let generated = questions; // static bank here
+let answersStore = {}; // answersStore[page] = [chosenOrNull,...]
+let pageScores = {};   // page -> score
+let finished = false;
+
+/* DOM refs */
+const adminDot = document.getElementById('adminDot');
+const adminModal = document.getElementById('adminModal');
+const registeredTableBody = document.querySelector('#registeredTable tbody');
+const totalRegisteredEl = document.getElementById('totalRegistered');
+const closeAdmin = document.getElementById('closeAdmin');
+const clearRegs = document.getElementById('clearRegs');
+
+const regForm = document.getElementById('regForm');
+const fnameEl = document.getElementById('fname');
+const lnameEl = document.getElementById('lname');
+const emailEl = document.getElementById('email');
+
+const registerCard = document.getElementById('registerCard');
+const examCard = document.getElementById('examCard');
+const certCard = document.getElementById('certCard');
+
+const displayStudent = document.getElementById('displayStudent');
+const questionsArea = document.getElementById('questionsArea');
+const pageResult = document.getElementById('pageResult');
+const totalSoFarEl = document.getElementById('totalSoFar');
+const examTitle = document.getElementById('examTitle');
+
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const submitPageBtn = document.getElementById('submitPageBtn');
+
+const certStudent = document.getElementById('certStudent');
+const certScoreDisplay = document.getElementById('certScoreDisplay');
+const certRemark = document.getElementById('certRemark');
+const certDate = document.getElementById('certDate');
+const downloadPdfBtn = document.getElementById('downloadPdf');
+const restartBtn = document.getElementById('restartBtn');
+
+/* UTIL */
+function saveRegistrationsList(rec){
+  let arr = JSON.parse(localStorage.getItem(STORAGE_REGS) || '[]');
+  arr.push(rec);
+  localStorage.setItem(STORAGE_REGS, JSON.stringify(arr));
+}
+function loadRegistrations(){ return JSON.parse(localStorage.getItem(STORAGE_REGS) || '[]'); }
+function clearRegistrations(){ localStorage.removeItem(STORAGE_REGS); }
+
+/* progress save/load */
+function saveProgress(){
+  try{
+    const payload = {
+      student, currentPage, answersStore, pageScores, finished
+    };
+    localStorage.setItem(STORAGE_PROGRESS, JSON.stringify(payload));
+  }catch(e){ console.warn(e); }
+}
+function loadProgress(){
+  try{
+    const raw = localStorage.getItem(STORAGE_PROGRESS);
+    if(!raw) return false;
+    const obj = JSON.parse(raw);
+    if(!obj) return false;
+    student = obj.student || student;
+    currentPage = obj.currentPage || currentPage;
+    answersStore = obj.answersStore || answersStore;
+    pageScores = obj.pageScores || pageScores;
+    finished = obj.finished || finished;
+    return true;
+  } catch(e){ return false; }
+}
+function clearProgress(){ localStorage.removeItem(STORAGE_PROGRESS); answersStore={}; pageScores={}; currentPage=1; finished=false; }
+
+/* Render page (10 questions) */
+function renderPage(page){
+  const totalPages = Math.ceil(generated.length / QUESTIONS_PER_PAGE);
+  document.getElementById('currentPage').textContent = page;
+  document.getElementById('totalPages').textContent = totalPages;
+  displayStudent.textContent = (student.fname || '') + ' ' + (student.lname || '');
+  const start = (page - 1) * QUESTIONS_PER_PAGE;
+  const pageQs = generated.slice(start, start + QUESTIONS_PER_PAGE);
+  let html = '';
+  for(let i=0;i<pageQs.length;i++){
+    const q = pageQs[i];
+    const qIndex = start + i;
+    const name = 'q' + qIndex;
+    html += '<div class="question"><div><strong>Q'+(qIndex+1)+':</strong> '+q.q+'</div>';
+    for(let j=0;j<q.opts.length;j++){
+      const opt = q.opts[j];
+      const checked = (answersStore[page] && answersStore[page][i] === opt) ? 'checked' : '';
+      html += '<label style="display:block;margin-top:6px"><input type="radio" name="'+name+'" value="'+opt+'" '+checked+'> '+opt+'</label>';
+    }
+    html += '</div>';
+  }
+  questionsArea.innerHTML = html;
+
+  // show existing page score
+  if(pageScores[page] !== undefined){
+    pageResult.textContent = 'You scored ' + pageScores[page] + ' / ' + pageQs.length + ' on this page.';
+  } else {
+    pageResult.textContent = '';
+  }
+
+  // update total so far
+  let total = 0;
+  for(let p in pageScores) if(pageScores.hasOwnProperty(p)) total += pageScores[p];
+  totalSoFarEl.textContent = total;
+
+  // prev/next enable
+  prevBtn.disabled = page === 1;
+  nextBtn.disabled = page === totalPages;
+}
+
+/* Evaluate current page */
+function evaluateCurrentPage(){
+  const start = (currentPage - 1) * QUESTIONS_PER_PAGE;
+  const pageQs = generated.slice(start, start + QUESTIONS_PER_PAGE);
+  let score = 0;
+  let chosenArr = [];
+  for(let i=0;i<pageQs.length;i++){
+    const qIndex = start + i;
+    const radios = document.getElementsByName('q' + qIndex);
+    let chosen = null;
+    for(let r=0;r<radios.length;r++){
+      if(radios[r].checked){ chosen = radios[r].value; break; }
+    }
+    chosenArr.push(chosen);
+    if(chosen !== null && String(chosen) === String(pageQs[i].ans)) score++;
+  }
+  pageScores[currentPage] = score;
+  answersStore[currentPage] = chosenArr;
+  saveProgress();
+  pageResult.textContent = 'You scored ' + score + ' / ' + pageQs.length + ' on this page.';
+  // update total
+  let total = 0;
+  for(let p in pageScores) if(pageScores.hasOwnProperty(p)) total += pageScores[p];
+  totalSoFarEl.textContent = total;
+  return score;
+}
+
+/* Finish exam */
+function finishExam(){
+  // ensure all pages evaluated
+  const totalPages = Math.ceil(generated.length / QUESTIONS_PER_PAGE);
+  for(let p=1;p<=totalPages;p++){
+    if(pageScores[p] === undefined){
+      // if unanswered page, evaluate from stored answers if any
+      currentPage = p;
+      renderPage(currentPage);
+      evaluateCurrentPage();
+    }
+  }
+  // compute total
+  let total = 0;
+  const max = generated.length;
+  for(let p=1;p<=Math.ceil(generated.length/QUESTIONS_PER_PAGE);p++){
+    total += pageScores[p] || 0;
+  }
+  const percent = Math.round((total / max) * 10000)/100;
+  const remark = percent >= 80 ? "Excellent performance" : percent >= 60 ? "Good performance" : percent >= 40 ? "Fair performance" : "Needs more practice";
+
+  // show certificate
+  registerCard.classList.add('hidden');
+  examCard.classList.add('hidden');
+  certCard.classList.remove('hidden');
+  document.getElementById('certStudent').textContent = student.fname + ' ' + student.lname;
+  document.getElementById('certScoreDisplay').textContent = total + ' / ' + max + ' (' + percent + '%)';
+  document.getElementById('certRemark').textContent = remark;
+  document.getElementById('certDate').textContent = (new Date()).toLocaleDateString();
+  finished = true;
+  saveProgress();
+}
+
+/* PDF download */
+document.getElementById('downloadPdf').addEventListener('click', function(){
+  const element = document.getElementById('certificateDiv');
+  if(typeof html2pdf === 'undefined'){
+    alert('PDF library not loaded. Open this file in a normal browser with internet to enable PDF download.');
+    return;
+  }
+  const opt = { margin:10, filename: (student.fname+'_'+student.lname+'_certificate.pdf').replace(/\s+/g,'_'), image:{type:'jpeg',quality:0.98}, html2canvas:{scale:2}, jsPDF:{unit:'mm',format:'a4',orientation:'landscape'} };
+  html2pdf().set(opt).from(element).save();
+});
+
+/* events wiring */
+regForm.addEventListener('submit', function(e){
+  e.preventDefault();
+  student.fname = fnameEl.value.trim();
+  student.lname = lnameEl.value.trim();
+  student.email = emailEl.value.trim();
+  if(!student.fname || !student.lname){ alert('Enter your name'); return; }
+
+  // register record for admin
+  saveRegistrationsList({ name: student.fname + ' ' + student.lname, email: student.email || '', time: Date.now() });
+
+  // init exam state
+  answersStore = {};
+  pageScores = {};
+  currentPage = 1;
+  finished = false;
+  registerCard.classList.add('hidden');
+  examCard.classList.remove('hidden');
+  renderPage(currentPage);
+  saveProgress();
+});
+
+document.getElementById('prevBtn').addEventListener('click', function(){
+  evaluateCurrentPage();
+  if(currentPage > 1){ currentPage--; renderPage(currentPage); }
+});
+document.getElementById('nextBtn').addEventListener('click', function(){
+  evaluateCurrentPage();
+  const totalPages = Math.ceil(generated.length / QUESTIONS_PER_PAGE);
+  if(currentPage < totalPages){ currentPage++; renderPage(currentPage); }
+  else {
+    if(confirm('This is the last page. Finish exam and generate certificate?')) finishExam();
+  }
+});
+document.getElementById('submitPageBtn').addEventListener('click', function(){
+  const s = evaluateCurrentPage();
+  alert('Page submitted. You scored ' + s + ' / ' + QUESTIONS_PER_PAGE + '. Use Next to continue.');
+});
+document.getElementById('restartBtn').addEventListener('click', function(){
+  if(confirm('Start a new student? This will clear current progress only.')){ clearProgress(); location.reload(); }
+});
+
+/* admin behavior */
+adminDot.addEventListener('click', function(){
+  const pass = prompt('Enter admin password:');
+  if(pass === null) return;
+  if(pass === ADMIN_PASSWORD){
+    const regs = loadRegistrations();
+    const tbody = document.querySelector('#registeredTable tbody');
+    tbody.innerHTML = '';
+    regs.forEach(function(r,i){
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>'+(i+1)+'</td><td>'+r.name+'</td><td>'+ (r.email||'') +'</td><td>'+(new Date(r.time)).toLocaleString()+'</td>';
+      tbody.appendChild(tr);
+    });
+    totalRegisteredEl.textContent = regs.length;
+    adminModal.style.display = 'flex';
+  } else {
+    alert('Wrong password!');
+  }
+});
+closeAdmin.addEventListener('click', function(){ adminModal.style.display = 'none'; });
+clearRegs.addEventListener('click', function(){ if(confirm('Clear all registrations?')){ clearRegistrations(); document.querySelector('#registeredTable tbody').innerHTML=''; totalRegisteredEl.textContent=0; alert('Cleared.'); } });
+
+/* resume progress if present */
+if(loadProgress()){
+  if(confirm('Found saved progress. Resume previous session?')){
+    // fill reg inputs for convenience
+    fnameEl.value = student.fname || '';
+    lnameEl.value = student.lname || '';
+    emailEl.value = student.email || '';
+    registerCard.classList.add('hidden');
+    examCard.classList.remove('hidden');
+    renderPage(currentPage);
+  } else {
+    clearProgress();
+  }
+}
+
+/* expose debug helper */
+window._exam100 = { questions, getState: ()=>({student,currentPage,answersStore,pageScores,finished}), clearProgress };
+
+</script>
+</body>
+</html>
